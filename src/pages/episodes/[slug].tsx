@@ -1,10 +1,10 @@
-import {format, parseISO} from 'date-fns';
-import {ptBR} from 'date-fns/locale';
-import {GetStaticPaths, GetStaticProps} from 'next';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { GetStaticPaths, GetStaticProps } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import {api} from '../../services/api';
-import {convertDurationToTimeString} from '../../utils/convertDurationToTimeString';
+import { api } from '../../services/api';
+import { convertDurationToTimeString } from '../../utils/convertDurationToTimeString';
 import styles from './episode.module.scss';
 
 type Episode = {
@@ -24,12 +24,21 @@ type EpisodeProps = {
 };
 
 export default function Episode({ episode }: EpisodeProps) {
+    // Necessário caso fallback for true, para que haja um tempo de aguardo
+    // ao carregar a página de episódio
+
+    //const router = useRouter();
+
+    //if (router.isFallback) {
+    //    return <p>Carregando...</p>
+    //}
+
     return (
         <div className={styles.episode}>
             <div className={styles.thumbnailContainer}>
                 <Link href="/">
                     <button type="button">
-                        <img src="/arrow-left.svg" alt="Voltar"/>
+                        <img src="/arrow-left.svg" alt="Voltar" />
                     </button>
                 </Link>
                 <Image
@@ -52,16 +61,47 @@ export default function Episode({ episode }: EpisodeProps) {
 
             <div
                 className={styles.description}
-                dangerouslySetInnerHTML={{__html: episode.description}}
+                dangerouslySetInnerHTML={{ __html: episode.description }}
             ></div>
         </div>
     );
 }
 
+// client(browser) ↔ next.js(node.js) ↔ server (back-end)
+
+// Necessário para poder gerar páginas dinâmicas em uma configuração
+// de páginas estáticas. Fallback é o retorno da função getStaticPaths para caso
+// o episódio não esteja na predefinição paths de páginas estáticas para serem
+// geradas no build.
+
+// Se for false: retorna status 404
+
+// Se for true: busca os dados na função getStaticProps, fazendo com que a
+// requisição aconteça pelo client(browser)
+
+// Se for 'blocking': busca os dados na camada intermediária, que é na região
+// do next.js(node.js)
+
 export const getStaticPaths: GetStaticPaths = async () => {
+    const { data } = await api.get('episodes', {
+        params: {
+            _limit: 2,
+            _sort: 'published_at',
+            _order: 'desc',
+        },
+    });
+
+    const paths = data.map(episode => {
+        return {
+            params: {
+                slug: episode.id,
+            },
+        };
+    });
+
     return {
-        paths: [],
-        fallback: 'blocking'
+        paths,
+        fallback: 'blocking',
     };
 };
 
@@ -77,18 +117,19 @@ export const getStaticProps: GetStaticProps = async (ctx) => {
         description: data.description,
         members: data.members,
         publishedAt: format(parseISO(data.published_at), 'd MMM yy', {
-            locale: ptBR
+            locale: ptBR,
         }),
         duration: Number(data.file.duration),
-        durationAsString: convertDurationToTimeString(Number(data.file.duration)),
-        url: data.file.url
+        durationAsString: convertDurationToTimeString(
+            Number(data.file.duration)
+        ),
+        url: data.file.url,
     };
-
 
     return {
         props: {
-            episode
+            episode,
         },
-        revalidate: 60 * 60 * 24
-    }
+        revalidate: 60 * 60 * 24,
+    };
 };
